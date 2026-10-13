@@ -1,0 +1,293 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>My Platformer Game</title>
+<style>
+  body {
+    margin: 0;
+    background: #182848;
+    color: white;
+    font-family: Arial, sans-serif;
+    text-align: center;
+  }
+  h2 { margin: 12px 0 6px; }
+  #info { padding: 8px; font-size: 18px; }
+  canvas {
+    display: block;
+    width: 100%;
+    max-width: 800px;
+    margin: auto;
+    background: #75d8ff;
+    touch-action: none;
+  }
+  #controls {
+    display: flex;
+    justify-content: center;
+    gap: 16px;
+    padding: 16px 8px;
+  }
+  button {
+    font-size: 28px;
+    font-weight: bold;
+    padding: 15px 25px;
+    border: none;
+    border-radius: 14px;
+    background: #ffcb45;
+    color: #182848;
+    touch-action: none;
+  }
+  #jump { background: #61e294; }
+  #restart { font-size: 16px; padding: 10px 18px; }
+</style>
+</head>
+<body>
+
+<h2>⭐ Mini Platformer ⭐</h2>
+<div id="info">Coins: <span id="score">0</span> / 5</div>
+<canvas id="game" width="800" height="450"></canvas>
+
+<div id="controls">
+  <button id="left">⬅️</button>
+  <button id="right">➡️</button>
+  <button id="jump">⬆️ Jump</button>
+</div>
+<button id="restart">Restart Game ↻</button>
+<p>Move, jump, collect coins, and reach the green flag!</p>
+
+<script>
+const canvas = document.getElementById("game");
+const ctx = canvas.getContext("2d");
+const scoreText = document.getElementById("score");
+
+const player = {
+  x: 40, y: 330, w: 30, h: 38,
+  vx: 0, vy: 0, speed: 4, grounded: false
+};
+
+const platforms = [
+  {x: 0,   y: 390, w: 210, h: 60},
+  {x: 260, y: 330, w: 130, h: 25},
+  {x: 440, y: 270, w: 130, h: 25},
+  {x: 620, y: 210, w: 180, h: 240}
+];
+
+const coins = [
+  {x: 130, y: 350, got: false},
+  {x: 300, y: 290, got: false},
+  {x: 480, y: 230, got: false},
+  {x: 660, y: 170, got: false},
+  {x: 740, y: 170, got: false}
+];
+
+const keys = {left: false, right: false};
+let score = 0;
+let won = false;
+
+function reset() {
+  player.x = 40;
+  player.y = 330;
+  player.vx = 0;
+  player.vy = 0;
+  player.grounded = false;
+  coins.forEach(c => c.got = false);
+  score = 0;
+  won = false;
+  scoreText.textContent = score;
+}
+
+function bindHold(id, key) {
+  const button = document.getElementById(id);
+
+  button.addEventListener("pointerdown", e => {
+    e.preventDefault();
+    keys[key] = true;
+    button.setPointerCapture(e.pointerId);
+  });
+
+  function release(e) {
+    keys[key] = false;
+  }
+
+  button.addEventListener("pointerup", release);
+  button.addEventListener("pointercancel", release);
+  button.addEventListener("lostpointercapture", release);
+}
+
+bindHold("left", "left");
+bindHold("right", "right");
+
+function jump() {
+  if (player.grounded && !won) {
+    player.vy = -12;
+    player.grounded = false;
+  }
+}
+
+document.getElementById("jump").addEventListener(
+  "pointerdown", e => {
+    e.preventDefault();
+    jump();
+  }
+);
+
+document.getElementById("restart").onclick = reset;
+
+document.addEventListener("keydown", e => {
+  if (["ArrowLeft", "ArrowRight", "ArrowUp", " "].includes(e.key)) {
+    e.preventDefault();
+  }
+  if (e.key === "ArrowLeft" || e.key === "a") keys.left = true;
+  if (e.key === "ArrowRight" || e.key === "d") keys.right = true;
+  if (e.key === "ArrowUp" || e.key === " ") jump();
+});
+
+document.addEventListener("keyup", e => {
+  if (e.key === "ArrowLeft" || e.key === "a") keys.left = false;
+  if (e.key === "ArrowRight" || e.key === "d") keys.right = false;
+});
+
+function update() {
+  if (won) return;
+
+  player.vx = 0;
+  if (keys.left) player.vx = -player.speed;
+  if (keys.right) player.vx = player.speed;
+
+  player.x += player.vx;
+  player.x = Math.max(0, Math.min(770, player.x));
+
+  const oldBottom = player.y + player.h;
+  player.vy += 0.55;
+  player.y += player.vy;
+  player.grounded = false;
+
+  for (const p of platforms) {
+    const newBottom = player.y + player.h;
+    const overlapsX =
+      player.x + player.w > p.x &&
+      player.x < p.x + p.w;
+
+    if (
+      overlapsX &&
+      player.vy >= 0 &&
+      oldBottom <= p.y &&
+      newBottom >= p.y
+    ) {
+      player.y = p.y - player.h;
+      player.vy = 0;
+      player.grounded = true;
+    }
+  }
+
+  for (const c of coins) {
+    if (
+      !c.got &&
+      player.x < c.x + 12 &&
+      player.x + player.w > c.x - 12 &&
+      player.y < c.y + 12 &&
+      player.y + player.h > c.y - 12
+    ) {
+      c.got = true;
+      score++;
+      scoreText.textContent = score;
+    }
+  }
+
+  // Fall off the screen? Start again.
+  if (player.y > 480) {
+    reset();
+  }
+
+  // Reach the flag after collecting all coins.
+  if (
+    score === coins.length &&
+    player.x + player.w > 750 &&
+    player.y + player.h > 210
+  ) {
+    won = true;
+  }
+}
+
+function draw() {
+  ctx.clearRect(0, 0, 800, 450);
+
+  // Sky and clouds
+  ctx.fillStyle = "#75d8ff";
+  ctx.fillRect(0, 0, 800, 450);
+
+  ctx.fillStyle = "white";
+  for (const cloud of [
+    [100, 65], [340, 100], [570, 55]
+  ]) {
+    ctx.beginPath();
+    ctx.arc(cloud[0], cloud[1], 22, 0, Math.PI * 2);
+    ctx.arc(cloud[0] + 25, cloud[1] + 5, 18, 0, Math.PI * 2);
+    ctx.arc(cloud[0] - 20, cloud[1] + 10, 15, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  // Platforms
+  for (const p of platforms) {
+    ctx.fillStyle = "#8b552e";
+    ctx.fillRect(p.x, p.y, p.w, p.h);
+    ctx.fillStyle = "#35c85a";
+    ctx.fillRect(p.x, p.y, p.w, 10);
+  }
+
+  // Coins
+  for (const c of coins) {
+    if (c.got) continue;
+    ctx.fillStyle = "#ffca28";
+    ctx.beginPath();
+    ctx.arc(c.x, c.y, 10, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = "#ed9410";
+    ctx.lineWidth = 3;
+    ctx.stroke();
+  }
+
+  // Goal flag
+  ctx.fillStyle = "#654321";
+  ctx.fillRect(765, 150, 5, 60);
+  ctx.fillStyle = "#ff4747";
+  ctx.beginPath();
+  ctx.moveTo(770, 150);
+  ctx.lineTo(800, 162);
+  ctx.lineTo(770, 178);
+  ctx.fill();
+
+  // Player
+  ctx.fillStyle = "#ed4141";
+  ctx.fillRect(player.x, player.y, player.w, player.h);
+  ctx.fillStyle = "#ffd5a1";
+  ctx.fillRect(player.x + 16, player.y + 5, 11, 12);
+  ctx.fillStyle = "#222";
+  ctx.fillRect(player.x + 22, player.y + 8, 3, 3);
+  ctx.fillStyle = "#3346bd";
+  ctx.fillRect(player.x, player.y + 27, player.w, 11);
+
+  if (won) {
+    ctx.fillStyle = "rgba(0,0,0,0.75)";
+    ctx.fillRect(100, 145, 600, 140);
+    ctx.fillStyle = "#ffffff";
+    ctx.textAlign = "center";
+    ctx.font = "bold 32px Arial";
+    ctx.fillText("YOU WIN! 🎉", 400, 200);
+    ctx.font = "20px Arial";
+    ctx.fillText("You collected all 5 coins!", 400, 240);
+    ctx.textAlign = "left";
+  }
+}
+
+function gameLoop() {
+  update();
+  draw();
+  requestAnimationFrame(gameLoop);
+}
+
+gameLoop();
+</script>
+</body>
+</html>
